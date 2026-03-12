@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一个"不坑"的游戏</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            background: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+        .game-container {
+            width: 600px;
+            max-width: 90%;
+            background: #f5f5f5;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.1);
+            color: black;
+            position: relative;
+            border: 1px solid #ddd;
+        }
+        .center {
+            text-align: center;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .progress-container {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #27ae60;
+            transition: width 0.1s linear;
+        }
+        .event-text {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            min-height: 2rem;
+            color: #e67e22;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background: white;
+            font-size: 1rem;
+            outline: none;
+        }
+        input::placeholder {
+            color: #999;
+            opacity: 1;
+        }
+        .error-message {
+            color: #e74c3c;
+            margin-top: 10px;
+            min-height: 2rem;
+        }
+        .menu-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 20px 0;
+            cursor: default;
+        }
+        .menu-title span {
+            cursor: pointer;
+            color: #f39c12;
+            text-decoration: none;
+            border: none;
+            outline: none;
+            background: transparent;
+        }
+        button {
+            background: #3498db;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            padding: 15px 30px;
+            border-radius: 40px;
+            margin: 10px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #2980b9;
+            transition: 0.1s;
+            min-width: 150px;
+        }
+        button:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0 #2980b9;
+        }
+        .tip-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #95a5a6;
+            box-shadow: 0 5px 0 #7f8c8d;
+            padding: 8px 15px;
+            font-size: 1rem;
+            min-width: auto;
+        }
+        .info-text {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            color: #555;
+        }
+        .flex {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container" id="gameContainer">
+    <div id="loadingScreen" class="center">
+        <div class="event-text" id="eventMessage"></div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div id="loadingInfo">加载中...</div>
+    </div>
+    <div id="loginScreen" class="center hidden">
+        <input type="text" id="username" placeholder="请输入用户名">
+        <input type="text" id="password" placeholder="请输入密码">
+        <div class="error-message" id="loginError"></div>
+        <button id="loginBtn">登录</button>
+    </div>
+    <div id="menuScreen" class="center hidden">
+        <button class="tip-btn" id="tipBtn">提示</button>
+        <div class="menu-title" id="mainTitle">一个"<span id="gameTrigger">游戏</span>"</div>
+        <div class="flex">
+            <button id="startGameBtn">开始游戏</button>
+            <button id="settingsBtn">设置</button>
+            <button id="exitGameBtn">退出游戏</button>
+        </div>
+        <div class="info-text" id="menuInfo"></div>
+    </div>
+    <div id="level1Screen" class="center hidden">
+        <h2>第一关</h2>
+        <p>这里以后会是真正的游戏内容</p>
+        <button id="backToMenuBtn">返回菜单</button>
+    </div>
+</div>
+<script>
+(function() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    const loginScreen = document.getElementById('loginScreen');
+    const menuScreen = document.getElementById('menuScreen');
+    const level1Screen = document.getElementById('level1Screen');
+    const progressBar = document.getElementById('progressBar');
+    const eventMessage = document.getElementById('eventMessage');
+    const loadingInfo = document.getElementById('loadingInfo');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const loginError = document.getElementById('loginError');
+    const loginBtn = document.getElementById('loginBtn');
+    const tipBtn = document.getElementById('tipBtn');
+    const startGameBtn = document.getElementById('startGameBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const exitGameBtn = document.getElementById('exitGameBtn');
+    const gameTrigger = document.getElementById('gameTrigger');
+    const menuInfo = document.getElementById('menuInfo');
+    const backToMenuBtn = document.getElementById('backToMenuBtn');
+
+    let progress = 0;
+    let timer = null;
+    let eventTriggered = false;
+    let paused = false;
+    let pauseTimer = null;
+
+    function getDelay(p) {
+        if (p < 50) return 100;
+        if (p < 80) return 250;
+        if (p < 95) return 500;
+        return 1000;
+    }
+
+    function advance() {
+        if (paused) return;
+        if (progress >= 100) {
+            clearInterval(timer);
+            loadingScreen.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            return;
+        }
+        if (!eventTriggered && progress >= 75) {
+            eventTriggered = true;
+            triggerEvent();
+            return;
+        }
+        progress = Math.min(progress + 1, 100);
+        progressBar.style.width = progress + '%';
+        loadingInfo.innerText = '加载中... ' + progress + '%';
+        clearInterval(timer);
+        timer = setInterval(advance, getDelay(progress));
+    }
+
+    function triggerEvent() {
+        const rand = Math.random();
+        let msg = '';
+        let action = null;
+        if (rand < 0.25) {
+            msg = '我帮你增快进度条';
+            action = () => {
+                clearInterval(timer);
+                timer = setInterval(() => {
+                    if (paused) return;
+                    progress = Math.min(progress + 1, 100);
+                    progressBar.style.width = progress + '%';
+                    loadingInfo.innerText = '加载中... ' + progress + '%';
+                    if (progress >= 100) {
+                        clearInterval(timer);
+                        loadingScreen.classList.add('hidden');
+                        loginScreen.classList.remove('hidden');
+                    }
+                }, 150);
+            };
+        } else if (rand < 0.5) {
+            msg = '我帮你扣点进度';
+            action = () => {
+                progress = Math.max(0, progress - 15);
+                progressBar.style.width = progress + '%';
+                loadingInfo.innerText = '加载中... ' + progress + '%';
+            };
+        } else if (rand < 0.65) {
+            msg = '我帮你加点进度';
+            action = () => {
+                progress = Math.min(100, progress + 5);
+                progressBar.style.width = progress + '%';
+                loadingInfo.innerText = '加载中... ' + progress + '%';
+            };
+        } else {
+            msg = '我帮你加速进度条\n坏了进度条卡住了';
+            action = () => {
+                paused = true;
+                clearInterval(timer);
+                pauseTimer = setTimeout(() => {
+                    paused = false;
+                    timer = setInterval(advance, getDelay(progress));
+                }, 5000);
+            };
+        }
+        eventMessage.innerText = msg;
+        if (action) action();
+        if (!paused) {
+            clearInterval(timer);
+            timer = setInterval(advance, getDelay(progress));
+        }
+    }
+
+    function startLoading() {
+        progress = 0;
+        eventTriggered = false;
+        paused = false;
+        if (pauseTimer) clearTimeout(pauseTimer);
+        progressBar.style.width = '0%';
+        loadingInfo.innerText = '加载中... 0%';
+        eventMessage.innerText = '';
+        loadingScreen.classList.remove('hidden');
+        loginScreen.classList.add('hidden');
+        menuScreen.classList.add('hidden');
+        level1Screen.classList.add('hidden');
+        timer = setInterval(advance, 100);
+    }
+
+    loginBtn.addEventListener('click', () => {
+        const user = usernameInput.value;
+        const pass = passwordInput.value;
+        if (user === '请输入用户名' && pass === '请输入密码') {
+            loginError.innerText = '';
+            loginScreen.classList.add('hidden');
+            menuScreen.classList.remove('hidden');
+            usernameInput.value = '';
+            passwordInput.value = '';
+        } else if (user === '王永恺') {
+            loginError.innerText = '还想登我号，做梦!';
+            passwordInput.value = '';
+        } else {
+            loginError.innerText = '还想登录，做梦!';
+            usernameInput.value = '';
+            passwordInput.value = '';
+        }
+    });
+
+    let tipTimer = null;
+    tipBtn.addEventListener('click', () => {
+        menuInfo.innerText = '等待30秒即可查看提示';
+        if (tipTimer) clearTimeout(tipTimer);
+        tipTimer = setTimeout(() => {
+            menuInfo.innerText = '还想看提示，做梦!恭喜你成功浪费了30秒时间';
+        }, 30000);
+    });
+
+    startGameBtn.addEventListener('click', () => {
+        menuInfo.innerText = '都说"不坑"了，你咋还点呢?';
+    });
+
+    settingsBtn.addEventListener('click', () => {
+        menuInfo.innerText = '看剧透了是吧？早就不好使了';
+    });
+
+    exitGameBtn.addEventListener('click', () => {
+        menuInfo.innerText = '';
+        loginScreen.classList.remove('hidden');
+        menuScreen.classList.add('hidden');
+    });
+
+    gameTrigger.addEventListener('click', () => {
+        menuScreen.classList.add('hidden');
+        level1Screen.classList.remove('hidden');
+    });
+
+    backToMenuBtn.addEventListener('click', () => {
+        level1Screen.classList.add('hidden');
+        menuScreen.classList.remove('hidden');
+    });
+
+    startLoading();
+
+    window.addEventListener('beforeunload', () => {
+        if (timer) clearInterval(timer);
+        if (pauseTimer) clearTimeout(pauseTimer);
+    });
+})();
+</script>
+</body>
+</html>
